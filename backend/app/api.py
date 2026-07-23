@@ -12,6 +12,7 @@ Then open http://127.0.0.1:8000/docs for interactive API docs.
 """
 
 from pathlib import Path
+import math
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
@@ -26,6 +27,7 @@ MIN_RATING = 0.5
 MAX_RATING = 5.0
 USER_RATING_THRESHOLD = 20
 MOVIE_RATING_THRESHOLD = 5
+
 
 app = FastAPI(title="Hybrid Movie Recommender API")
 
@@ -83,7 +85,7 @@ def load_models():
 # ---------------------------------------------------------------------
 # Helper functions (same logic as hybrid.py)
 # ---------------------------------------------------------------------
-def get_similar_movies(movie_id, n=10):
+def get_similar_movies(movie_id, min_rate=0.2):
     movies = state["movies"]
     similarity_matrix = state["similarity_matrix"]
     movieId_to_idx = state["movieId_to_idx"]
@@ -95,20 +97,32 @@ def get_similar_movies(movie_id, n=10):
     idx = movieId_to_idx[movie_id]
     scores = list(enumerate(similarity_matrix[idx]))
     scores = sorted(scores, key=lambda x: x[1], reverse=True)
-    scores = [s for s in scores if s[0] != idx][:n]
+    scores = [s for s in scores if s[0] != idx][:]
+
 
     results = []
     for i, score in scores:
-        mid = idx_to_movieId[i]
-        row = movies.loc[movies["movieId"] == mid].iloc[0]
-        results.append({
-            "movieId": int(mid),
-            "title": row["clean_title"],
-            "year": None if pd.isna(row["year"]) else int(row["year"]),
-            "poster_path": row.get("poster_path", ""),
-            "score": round(float(score), 4),
-            "source": "content",
-        })
+
+        if score < min_rate:
+            break
+        else:    
+            mid = idx_to_movieId[i]
+            row = movies.loc[movies["movieId"] == mid].iloc[0]
+
+            poster = row.get("poster_path", "")
+            if pd.isna(poster):
+                poster =""
+    
+    
+            results.append({
+                "movieId": int(mid),
+                "title": row["clean_title"],
+                "year": None if pd.isna(row["year"]) else int(row["year"]),
+                "poster_path": poster,
+                "score": round(float(score), 4),
+                "source": "content",
+            })
+
     return results
 
 
@@ -189,7 +203,7 @@ def recommend(user_id: int, n: int = Query(10, ge=1, le=50)):
         strategy = "content"
         user_ratings = ratings_train[ratings_train["userId"] == user_id]
         seed_movie_id = int(user_ratings.sort_values("rating", ascending=False).iloc[0]["movieId"])
-        recs = get_similar_movies(seed_movie_id, n=n)
+        recs = get_similar_movies(seed_movie_id, MIN_RATING)
     else:
         strategy = "collaborative"
         recs = get_cf_recommendations(user_id, n=n)
@@ -203,14 +217,14 @@ def recommend(user_id: int, n: int = Query(10, ge=1, le=50)):
 
 
 @app.get("/similar/{movie_id}")
-def similar(movie_id: int, n: int = Query(10, ge=1, le=50)):
+def similar(movie_id: int, n: float = Query(0.25, ge=0.01, le=1)):
     """
     Content-based "movies like this" endpoint - independent of any user.
     """
     if movie_id not in state["movieId_to_idx"]:
         raise HTTPException(status_code=404, detail=f"movieId {movie_id} not found")
 
-    recs = get_similar_movies(movie_id, n=n)
+    recs = get_similar_movies(movie_id, min_rate=n)
     return {"movie_id": movie_id, "recommendations": recs}
 
 

@@ -56,12 +56,12 @@ function App() {
     setSimilarMovies([]);
     setError("");
     try {
-      const res = await fetch(`${API_BASE}/similar/${movie.movieId}?n=10`);
+      const res = await fetch(`${API_BASE}/similar/${movie.movieId}?n=0.20`);
       if (!res.ok) throw new Error("Could not fetch similar movies");
       const data = await res.json();
       setSimilarMovies(data.recommendations);
     } catch (err) {
-      setError(err.message);
+      setError("error in handleSelectiveError", movie.movieId);
     }
   }
 
@@ -77,7 +77,7 @@ function App() {
       const data = await res.json();
       setUserRecs(data);
     } catch (err) {
-      setError(err.message);
+      setError("error in HandleGetUserRecs");
     } finally {
       setLoading(false);
     }
