@@ -73,7 +73,7 @@ function App() {
     setSimilarMovies([]);
     setError("");
     try {
-      const res = await fetch(`${API_BASE}/similar/${movie.movieId}?n=10`);
+      const res = await fetch(`${API_BASE}/similar/${movie.movieId}?n=0.2`);
       if (!res.ok) throw new Error("Could not fetch similar movies");
       const data = await res.json();
       setSimilarMovies(data.recommendations);

@@ -90,11 +90,14 @@ def load_models():
 # Helper functions
 # ---------------------------------------------------------------------
 def movie_row_to_dict(row, score=None, source=None):
+    poster = row.get("poster_path","")
+    if pd.isna(poster):
+        poster =""
     d = {
         "movieId": int(row["movieId"]),
         "title": row["clean_title"],
         "year": None if pd.isna(row["year"]) else int(row["year"]),
-        "poster_path": row.get("poster_path", "") or "",
+        "poster_path": poster,
     }
     if score is not None:
         d["score"] = round(float(score), 4)
@@ -103,25 +106,34 @@ def movie_row_to_dict(row, score=None, source=None):
     return d
 
 
-def get_similar_movies(movie_id, n=10):
+def get_similar_movies(movie_id, min_rate = 0.15):
     movies = state["movies"]
     similarity_matrix = state["similarity_matrix"]
     movieId_to_idx = state["movieId_to_idx"]
     idx_to_movieId = state["idx_to_movieId"]
-
     if movie_id not in movieId_to_idx:
         return []
-
     idx = movieId_to_idx[movie_id]
     scores = list(enumerate(similarity_matrix[idx]))
     scores = sorted(scores, key=lambda x: x[1], reverse=True)
-    scores = [s for s in scores if s[0] != idx][:n]
-
+    scores = [s for s in scores if s[0] != idx][:]
     results = []
-    for i, score in scores:
-        mid = idx_to_movieId[i]
-        row = movies.loc[movies["movieId"] == mid].iloc[0]
-        results.append(movie_row_to_dict(row, score=score, source="content"))
+    for i, score in scores: 
+        if score < min_rate: 
+            break
+        else:
+            mid = idx_to_movieId[i]
+            row = movies.loc[movies["movieId"] == mid].iloc[0]
+            poster = row.get("poster_path", "")
+            if pd.isna(poster): 
+                poster =""
+            results.append({
+                "movieId": int(mid), "title": row["clean_title"],
+                "year": None if pd.isna(row["year"]) else int(row["year"]),
+                "poster_path": poster,
+                "score": round(float(score), 4),
+                "source": "content", })
+            
     return results
 
 
@@ -278,7 +290,7 @@ def recommend(user_id: int, n: int = Query(10, ge=1, le=50)):
             strategy = "content"
             user_ratings = ratings_train[ratings_train["userId"] == user_id]
             seed_movie_id = int(user_ratings.sort_values("rating", ascending=False).iloc[0]["movieId"])
-            recs = get_similar_movies(seed_movie_id, n=n)
+            recs = get_similar_movies(seed_movie_id, min_rate = 0.2)
         else:
             strategy = "collaborative"
             recs = get_cf_recommendations(user_id, n=n)
@@ -318,10 +330,10 @@ def recommend(user_id: int, n: int = Query(10, ge=1, le=50)):
 
 
 @app.get("/similar/{movie_id}")
-def similar(movie_id: int, n: int = Query(10, ge=1, le=50)):
+def similar(movie_id: int, n: float = Query(0.1, ge=0.05, le=0.95)):
     if movie_id not in state["movieId_to_idx"]:
         raise HTTPException(status_code=404, detail=f"movieId {movie_id} not found")
-    recs = get_similar_movies(movie_id, n=n)
+    recs = get_similar_movies(movie_id, min_rate=n)
     return {"movie_id": movie_id, "recommendations": recs}
 
 
