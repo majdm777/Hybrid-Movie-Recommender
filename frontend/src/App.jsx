@@ -1,5 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "./App.css";
+import SignupPage from "./SignupPage";
+import "./SignupPage.css";
+import RatePage from "./RatePage";
+import "./RatePage.css";
 
 const API_BASE = "http://127.0.0.1:8000";
 const TMDB_IMG_BASE = "https://image.tmdb.org/t/p/w200";
@@ -27,12 +31,25 @@ function MovieCard({ movie }) {
 }
 
 function App() {
+  const [myUserId, setMyUserId] = useState(null);
+  const [checkedStorage, setCheckedStorage] = useState(false);
+
+  useEffect(() => {
+    const savedId = localStorage.getItem("userId");
+    if (savedId) {
+      setMyUserId(savedId);
+    }
+    setCheckedStorage(true);
+  }, []);
+
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [similarMovies, setSimilarMovies] = useState([]);
   const [selectedMovie, setSelectedMovie] = useState(null);
 
-  const [userId, setUserId] = useState("");
+  const [activeTab, setActiveTab] = useState("discover");
+  const [ratedCount, setRatedCount] = useState(0);
+
   const [userRecs, setUserRecs] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -56,31 +73,37 @@ function App() {
     setSimilarMovies([]);
     setError("");
     try {
-      const res = await fetch(`${API_BASE}/similar/${movie.movieId}?n=0.20`);
+      const res = await fetch(`${API_BASE}/similar/${movie.movieId}?n=10`);
       if (!res.ok) throw new Error("Could not fetch similar movies");
       const data = await res.json();
       setSimilarMovies(data.recommendations);
     } catch (err) {
-      setError("error in handleSelectiveError", movie.movieId);
+      setError(err.message);
     }
   }
 
-  async function handleGetUserRecs(e) {
-    e.preventDefault();
-    if (!userId.trim()) return;
+  async function handleGetUserRecs() {
     setLoading(true);
     setError("");
     setUserRecs(null);
     try {
-      const res = await fetch(`${API_BASE}/recommend/${userId}?n=10`);
+      const res = await fetch(`${API_BASE}/recommend/${myUserId}?n=10`);
       if (!res.ok) throw new Error("Could not fetch recommendations");
       const data = await res.json();
       setUserRecs(data);
     } catch (err) {
-      setError("error in HandleGetUserRecs");
+      setError(err.message);
     } finally {
       setLoading(false);
     }
+  }
+
+  if (!checkedStorage) {
+    return null; // avoid a flash of the signup page while checking localStorage
+  }
+
+  if (!myUserId) {
+    return <SignupPage onSignupComplete={(id) => setMyUserId(id)} />;
   }
 
   return (
@@ -88,78 +111,111 @@ function App() {
       <header className="app-header">
         <h1>🎬 Hybrid Movie Recommender</h1>
         <p className="subtitle">Content-based + Collaborative Filtering</p>
+        <p className="signed-in-as">
+          Signed in as user #{myUserId}{" "}
+          <button
+            className="link-button"
+            onClick={() => {
+              localStorage.removeItem("userId");
+              localStorage.removeItem("displayName");
+              setMyUserId(null);
+            }}
+          >
+            (switch user)
+          </button>
+        </p>
       </header>
+
+      <nav className="tab-nav">
+        <button
+          className={`tab-button ${activeTab === "discover" ? "tab-button--active" : ""}`}
+          onClick={() => setActiveTab("discover")}
+        >
+          Discover
+        </button>
+        <button
+          className={`tab-button ${activeTab === "rate" ? "tab-button--active" : ""}`}
+          onClick={() => setActiveTab("rate")}
+        >
+          Rate Movies
+        </button>
+      </nav>
 
       {error && <div className="error-banner">{error}</div>}
 
-      {/* --- Search & similar movies --- */}
-      <section className="section">
-        <h2>Find similar movies</h2>
-        <form onSubmit={handleSearch} className="search-form">
-          <input
-            type="text"
-            placeholder="Search a movie title..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <button type="submit">Search</button>
-        </form>
+      {activeTab === "rate" && (
+        <RatePage
+          userId={myUserId}
+          ratedCount={ratedCount}
+          onRatingSubmitted={() => setRatedCount((c) => c + 1)}
+        />
+      )}
 
-        {searchResults.length > 0 && (
-          <div className="search-results">
-            {searchResults.map((m) => (
-              <button
-                key={m.movieId}
-                className="search-result-item"
-                onClick={() => handleSelectMovie(m)}
-              >
-                {m.title} {m.year ? `(${m.year})` : ""}
-              </button>
-            ))}
-          </div>
-        )}
+      {activeTab === "discover" && (
+        <>
+          {/* --- Search & similar movies --- */}
+          <section className="section">
+            <h2>Find similar movies</h2>
+            <form onSubmit={handleSearch} className="search-form">
+              <input
+                type="text"
+                placeholder="Search a movie title..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              <button type="submit">Search</button>
+            </form>
 
-        {selectedMovie && (
-          <div className="similar-section">
-            <h3>Movies similar to "{selectedMovie.title}"</h3>
-            <div className="movie-grid">
-              {similarMovies.map((m) => (
-                <MovieCard key={m.movieId} movie={m} />
-              ))}
-            </div>
-          </div>
-        )}
-      </section>
+            {searchResults.length > 0 && (
+              <div className="search-results">
+                {searchResults.map((m) => (
+                  <button
+                    key={m.movieId}
+                    className="search-result-item"
+                    onClick={() => handleSelectMovie(m)}
+                  >
+                    {m.title} {m.year ? `(${m.year})` : ""}
+                  </button>
+                ))}
+              </div>
+            )}
 
-      {/* --- Personalized recommendations --- */}
-      <section className="section">
-        <h2>Personalized recommendations</h2>
-        <form onSubmit={handleGetUserRecs} className="search-form">
-          <input
-            type="number"
-            placeholder="Enter a userId (e.g. 1)"
-            value={userId}
-            onChange={(e) => setUserId(e.target.value)}
-          />
-          <button type="submit">Get Recommendations</button>
-        </form>
+            {selectedMovie && (
+              <div className="similar-section">
+                <h3>Movies similar to "{selectedMovie.title}"</h3>
+                <div className="movie-grid">
+                  {similarMovies.map((m) => (
+                    <MovieCard key={m.movieId} movie={m} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
 
-        {loading && <p>Loading...</p>}
+          {/* --- Personalized recommendations --- */}
+          <section className="section">
+            <h2>Your personalized recommendations</h2>
+            <button onClick={handleGetUserRecs} className="get-recs-button">
+              {loading ? "Loading..." : "Get My Recommendations"}
+            </button>
 
-        {userRecs && (
-          <div>
-            <p className="strategy-badge">
-              User has {userRecs.user_rating_count} ratings → using{" "}
-              <strong>{userRecs.strategy}</strong> strategy
-            </p>
-            <div className="movie-grid">
-              {userRecs.recommendations.map((m) => (
-                <MovieCard key={m.movieId} movie={m} />
-              ))}
-            </div>
-          </div>
-        )}
-      </section>
+            {userRecs && (
+              <div>
+                <p className="strategy-badge">
+                  You have {userRecs.user_rating_count} ratings → using{" "}
+                  <strong>{userRecs.strategy}</strong> strategy
+                </p>
+                {userRecs.note && <p className="rec-note">{userRecs.note}</p>}
+                <div className="movie-grid">
+                  {userRecs.recommendations.map((m) => (
+                    <MovieCard key={m.movieId} movie={m} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        </>
+      )}
     </div>
   );
 }

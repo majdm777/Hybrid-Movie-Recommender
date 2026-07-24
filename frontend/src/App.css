@@ -29,6 +29,66 @@ body {
   margin: 0;
 }
 
+.signed-in-as {
+  color: #777;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: #e50914;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.tab-nav {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  justify-content: center;
+}
+
+.tab-button {
+  background: #1f1f1f;
+  border: 1px solid #333;
+  color: #ccc;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.tab-button--active {
+  background: #e50914;
+  border-color: #e50914;
+  color: white;
+}
+
+.get-recs-button {
+  padding: 10px 20px;
+  border-radius: 6px;
+  border: none;
+  background: #e50914;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+
+.get-recs-button:hover {
+  background: #c40812;
+}
+
+.rec-note {
+  color: #999;
+  font-size: 13px;
+  margin: -4px 0 12px 0;
+}
+
 .error-banner {
   background: #4a1d1d;
   color: #ff8080;
