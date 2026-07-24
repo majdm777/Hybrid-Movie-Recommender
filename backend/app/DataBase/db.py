@@ -34,8 +34,9 @@ def init_db(starting_user_id: int):
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
-            display_name TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            display_name TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(display_name)
         )
     """)
 
@@ -77,6 +78,15 @@ def create_new_user(display_name: str ) -> int:
 
     cur.execute("SELECT next_id FROM user_id_counter WHERE id = 1")
     new_id = cur.fetchone()["next_id"]
+
+    cur.execute("SELECT display_name FROM users where display_name = ?",(display_name,))
+    name = cur.fetchone()
+
+    if name is not None :
+        cur.execute("SELECT user_id FROM users WHERE display_name=?",(name["display_name"],))
+        id = cur.fetchone()["user_id"]
+
+        return id
 
     cur.execute(
         "INSERT INTO users (user_id, display_name) VALUES (?, ?)",
